@@ -94,7 +94,7 @@ def check_timeout():
     return False
 
 # -------------------------------------------------
-# DATA LOADING
+# DATA LOADING - FIXED VERSION
 # -------------------------------------------------
 @st.cache_data(ttl=300, show_spinner=False)
 def load_data():
@@ -104,9 +104,16 @@ def load_data():
         if "gcp_service_account" not in st.secrets:
             raise Exception("gcp_service_account not found in secrets")
         
+        # Convert secrets to dict and fix private key formatting
+        service_account_info = dict(st.secrets["gcp_service_account"])
+        
+        # Fix private key if it contains literal \n instead of actual newlines
+        if "private_key" in service_account_info:
+            service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+        
         # Authenticate using the service account credentials from Streamlit secrets
         creds = service_account.Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"],
+            service_account_info,
             scopes=[
                 "https://www.googleapis.com/auth/spreadsheets.readonly",
                 "https://www.googleapis.com/auth/drive.readonly"
