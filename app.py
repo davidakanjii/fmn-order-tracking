@@ -100,29 +100,41 @@ def check_timeout():
 def load_data():
     """Load data from Google Sheets"""
     try:
+        # Debug: Check if secrets exist
+        if "gcp_service_account" not in st.secrets:
+            raise Exception("gcp_service_account not found in secrets")
+        
         # Authenticate using the service account credentials from Streamlit secrets
         creds = service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"],
             scopes=[
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
+                "https://www.googleapis.com/auth/spreadsheets.readonly",
+                "https://www.googleapis.com/auth/drive.readonly"
             ]
         )
         
         # Authenticate and access Google Sheets
         gc = gspread.authorize(creds)
         
+        # Try to open the sheet
         sheet = gc.open("Saleschatbotdb").sheet1
         
+        # Get all records
         data = sheet.get_all_records()
 
         # Convert the data into a DataFrame
         df = pd.DataFrame(data)
-        st.success("✅ Connected to live Google Sheets data")
+        
+        if len(df) > 0:
+            st.success(f"✅ Connected to live Google Sheets data ({len(df)} records)")
+        else:
+            raise Exception("Sheet is empty")
 
     except Exception as e:
-        # Fallback: Show error and use sample data
-        st.warning(f"⚠️ Google Sheets connection unavailable. Using sample data for demonstration.")
+        # Show detailed error for debugging
+        error_msg = str(e)
+        st.error(f"❌ Google Sheets Error: {error_msg}")
+        st.warning(f"⚠️ Using sample data for demonstration.")
         
         # Sample data based on your actual data structure
         sample_data = {
