@@ -3,6 +3,8 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 import pydeck as pdk
+from google.auth import service_account
+import gspread
 
 # -------------------------------------------------
 # PAGE CONFIG
@@ -98,22 +100,20 @@ def check_timeout():
 def load_data():
     """Load data from Google Sheets"""
     try:
-        # Try to load from Google Colab/Sheets if available
-        from google.colab import auth
-        import gspread
-        from google.auth import default
-        
-        auth.authenticate_user()
-        creds, _ = default()
+        # Authenticate using the service account credentials from Streamlit secrets
+        creds = service_account.Credentials.from_service_account_info(
+            st.secrets["gcp_service_account"]
+        )
+
+        # Authenticate and access Google Sheets
         gc = gspread.authorize(creds)
-        
-        SHEET_NAME = "Saleschatbotdb"
-        sheet = gc.open(SHEET_NAME).get_worksheet(0)
-        
+        sheet = gc.open("Saleschatbotdb").sheet1  # Replace with your actual Google Sheet name
         data = sheet.get_all_records()
+
+        # Convert the data into a DataFrame
         df = pd.DataFrame(data)
         st.success("✅ Connected to live Google Sheets data")
-        
+
     except:
         # Fallback: Show error and use sample data
         st.warning("⚠️ Google Sheets connection unavailable. Using sample data for demonstration.")
@@ -156,7 +156,7 @@ def load_data():
             'distance_covered_inMeters': ['']
         }
         df = pd.DataFrame(sample_data)
-    
+
     # Clean and standardize data
     df = df.fillna('N/A')
     
@@ -185,200 +185,6 @@ def find_order_details(order_id, invoice_account, df):
         return None
     
     return rows
-
-# -------------------------------------------------
-# DISPLAY FUNCTIONS
-# -------------------------------------------------
-def display_customer_details(order_df):
-    """Section 1: Customer Details"""
-    st.markdown("### 👤 Customer Details")
-    first_row = order_df.iloc[0]
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.info(f"**📅 Order Date**\n\n{first_row['Sales Order Creation Date']}")
-    with col2:
-        st.info(f"**🆔 Invoice Account**\n\n{first_row['Invoice account']}")
-    with col3:
-        st.info(f"**📍 Delivery Address**\n\n{first_row['Delivery address Name']}")
-
-def display_product_details(order_df):
-    """Section 2: Product Details"""
-    st.markdown("### 📦 Product Details")
-    
-    # Create a clean table view
-    product_cols = ['Product name', 'Item number', 'Quantity Order', 'Unit', 'Unit price', 'Net amount']
-    available_cols = [col for col in product_cols if col in order_df.columns]
-    
-    if available_cols:
-        display_df = order_df[available_cols].copy()
-        
-        # Format pricing columns
-        if 'Unit price' in display_df.columns:
-            display_df['Unit price'] = display_df['Unit price'].apply(
-                lambda x: f"₦{float(x):,.2f}" if pd.notna(x) and str(x).strip() != '' else 'N/A'
-            )
-        if 'Net amount' in display_df.columns:
-            display_df['Net amount'] = display_df['Net amount'].apply(
-                lambda x: f"₦{float(x):,.2f}" if pd.notna(x) and str(x).strip() != '' else 'N/A'
-            )
-        
-        st.dataframe(display_df, use_container_width=True, hide_index=True)
-        
-        # Total Amount
-        try:
-            total = order_df['Net amount'].astype(float).sum()
-            st.metric("**Total Order Value**", f"₦{total:,.2f}")
-        except:
-            st.metric("**Total Order Value**", "N/A")
-
-def display_order_details(order_df):
-    """Section 3: Order Details"""
-    st.markdown("### 📋 Order Summary")
-    first_row = order_df.iloc[0]
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write(f"**🆔 Sales Order:** {first_row['Sales order']}")
-        st.write(f"**💳 Payment Date:** {first_row.get('Payment receipt date', 'N/A')}")
-    with col2:
-        st.write(f"**📦 Quantity Ordered:** {first_row['Quantity Order']} {first_row['Unit']}")
-        try:
-            st.write(f"**💵 Unit Price:** ₦{float(first_row['Unit price']):,.2f}")
-        except:
-            st.write(f"**💵 Unit Price:** N/A")
-    with col3:
-        st.write(f"**📊 Total Items:** {len(order_df)}")
-        try:
-            st.write(f"**💰 Net Amount:** ₦{float(first_row['Net amount']):,.2f}")
-        except:
-            st.write(f"**💰 Net Amount:** N/A")
-
-def display_delivery_timeline(order_df):
-    """Section 4 & 5: Expected Delivery Timeline and Order Status"""
-    st.markdown("### 🚚 Delivery Timeline & Status")
-    first_row = order_df.iloc[0]
-    
-    # Expected delivery date
-    expected_date = first_row.get('Delivery Expected Date', 'N/A')
-    st.info(f"**📅 Expected Delivery Date:** {expected_date}")
-    
-    # Order Status Information with visual indicators
-    st.markdown("#### 📍 Order Tracking Status")
-    
-    status_items = [
-        ("Order Dispatched", first_row.get('created_trip_date', 'N/A'), first_row.get('Order Dispatch Status', 'N/A')),
-        ("Arrived at Warehouse", first_row.get('arrival_at_source Date', 'N/A'), first_row.get('Vehicle Arrival Status at Warehouse Status', 'N/A')),
-        ("Trip Started", first_row.get('trip_started_date', 'N/A'), first_row.get('Trip Status', 'N/A')),
-        ("Arrived at Delivery", first_row.get('arrival_at_delivery_location Date', 'N/A'), first_row.get('Delivery Arrival Status', 'N/A'))
-    ]
-    
-    for status_label, date_time, status_desc in status_items:
-        col1, col2, col3 = st.columns([2, 2, 3])
-        
-        with col1:
-            if date_time != 'N/A' and str(date_time).strip() != '':
-                st.success(f"✅ **{status_label}**")
-            else:
-                st.warning(f"⏳ **{status_label}**")
-        
-        with col2:
-            if date_time != 'N/A' and str(date_time).strip() != '':
-                st.write(f"🕐 {date_time}")
-            else:
-                st.write("*Pending*")
-        
-        with col3:
-            if status_desc != 'N/A':
-                st.caption(f"_{status_desc}_")
-
-def display_delivery_map(order_df):
-    """Section 6: Delivery Location Map"""
-    st.markdown("### 🗺️ Delivery Location")
-    first_row = order_df.iloc[0]
-    
-    # Check if geolocation data exists
-    lat = first_row.get('delivery_geotag_lat', None)
-    lng = first_row.get('delivery_geotag_lng', None)
-    customer_loc = first_row.get('customer_location', 'N/A')
-    
-    if pd.notna(lat) and pd.notna(lng) and str(lat).strip() != '' and str(lng).strip() != '':
-        try:
-            lat_float = float(lat)
-            lng_float = float(lng)
-            
-            # Create map with PyDeck
-            view_state = pdk.ViewState(
-                latitude=lat_float,
-                longitude=lng_float,
-                zoom=13,
-                pitch=0
-            )
-            
-            layer = pdk.Layer(
-                "ScatterplotLayer",
-                data=[{"lat": lat_float, "lon": lng_float}],
-                get_position=["lon", "lat"],
-                get_color=[7, 100, 1, 200],
-                get_radius=200,
-            )
-            
-            st.pydeck_chart(pdk.Deck(
-                layers=[layer],
-                initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/streets-v11"
-            ))
-            
-            st.caption(f"📍 Customer Location: {customer_loc}")
-            st.caption(f"🌐 Coordinates: {lat_float}, {lng_float}")
-            
-            # Google Maps link
-            maps_url = f"https://www.google.com/maps?q={lat_float},{lng_float}"
-            st.markdown(f"[🔗 Open in Google Maps]({maps_url})")
-            
-        except (ValueError, TypeError):
-            st.warning("⚠️ Unable to display map - invalid coordinates")
-            st.write(f"**📍 Customer Location:** {customer_loc}")
-    else:
-        st.warning("⚠️ Geolocation data not available")
-        st.write(f"**📍 Customer Location:** {customer_loc}")
-
-def display_vehicle_details(order_df):
-    """Section 7: Vehicle Details"""
-    st.markdown("### 🚛 Vehicle & Driver Information")
-    first_row = order_df.iloc[0]
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("**🚗 VEHICLE INFORMATION**")
-        st.write(f"• **Vehicle Type:** {first_row.get('vehicle_type', 'N/A')}")
-        st.write(f"• **Truck Number:** {first_row.get('truck_no', 'N/A')}")
-        st.write(f"• **Tonnage Capacity:** {first_row.get('vehicle_tonnage_capacity', 'N/A')} tons")
-        st.write(f"• **Transporter:** {first_row.get('transporter', 'N/A')}")
-        st.write(f"• **Transaction Type:** {first_row.get('transaction_type', 'N/A')}")
-    
-    with col2:
-        st.markdown("**👨‍✈️ DRIVER & TRIP INFORMATION**")
-        st.write(f"• **Driver Name:** {first_row.get('driver_name', 'N/A')}")
-        st.write(f"• **Phone Number:** {first_row.get('phone_number', 'N/A')}")
-        st.write(f"• **Trip Type:** {first_row.get('trip_type', 'N/A')}")
-        
-        distance = first_row.get('distance_covered_inMeters', 'N/A')
-        if distance != 'N/A' and pd.notna(distance) and str(distance).strip() != '':
-            try:
-                distance_km = float(distance) / 1000
-                st.metric("🛣️ Distance Covered", f"{distance_km:.2f} km")
-            except (ValueError, TypeError):
-                st.write(f"• **Distance Covered:** Not available")
-        else:
-            st.write(f"• **Distance Covered:** Not available")
-    
-    # Full route in expandable section
-    trip_route = first_row.get('trip_route', 'N/A')
-    if trip_route != 'N/A':
-        with st.expander("🗺️ View Full Trip Route"):
-            st.write(trip_route)
 
 # -------------------------------------------------
 # MAIN APP
