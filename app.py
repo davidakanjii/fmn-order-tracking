@@ -559,7 +559,6 @@ def main():
                         st.session_state.order_result = result
                         st.session_state.stage = "results"
                         st.rerun()
-                    
                     elif result == "invalid_invoice":
                         st.session_state.attempts += 1
                         
@@ -568,7 +567,6 @@ def main():
                             st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
                         else:
                             st.error("❌ Invoice Account mismatch! Please verify and try again.")
-                    
                     else:
                         st.session_state.attempts += 1
                         
