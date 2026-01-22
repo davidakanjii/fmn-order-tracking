@@ -559,6 +559,7 @@ def main():
                         st.session_state.order_result = result
                         st.session_state.stage = "results"
                         st.rerun()
+                    
                     elif result == "invalid_invoice":
                         st.session_state.attempts += 1
                         
@@ -567,6 +568,7 @@ def main():
                             st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
                         else:
                             st.error("❌ Invoice Account mismatch! Please verify and try again.")
+                    
                     else:
                         st.session_state.attempts += 1
                         
@@ -646,43 +648,41 @@ def main():
                         st.session_state.order_result = result
                         st.session_state.stage = "results"
                         st.rerun()
-        
-        st.markdown("---")
-        
-        # Display all sections
-        display_customer_details(result)
-        st.markdown("---")
-        
-        display_product_details(result)
-        st.markdown("---")
-        
-        display_order_details(result)
-        st.markdown("---")
-        
-        display_delivery_timeline(result)
-        st.markdown("---")
-        
-        display_delivery_map(result)
-        st.markdown("---")
-        
-        display_vehicle_details(result)
-        st.markdown("---")
-        
-        # Action buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔍 Track Another Order", use_container_width=True):
-                st.session_state.stage = "order"
-                st.session_state.order_id = ""
-                st.session_state.order_result = None
-                st.rerun()
-        with col2:
-            if st.button("🏠 Start New Session", use_container_width=True):
-                st.session_state.stage = "name"
-                st.session_state.customer_name = ""
-                st.session_state.order_id = ""
-                st.session_state.order_result = None
-                st.rerun()
+                        
+                        st.markdown("---")
+                        
+                        # Display all sections
+                        display_customer_details(result)
+                        st.markdown("---")
+                        
+                        display_product_details(result)
+                        st.markdown("---")
+                        
+                        display_order_details(result)
+                        st.markdown("---")
+                        
+                        display_delivery_timeline(result)
+                        st.markdown("---")
+                        
+                        display_delivery_map(result)
+                        st.markdown("---")
+                        
+                        display_vehicle_details(result)
+                        st.markdown("---")
+                        
+                        # Action buttons
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            if st.button("🔍 Track Another Order", use_container_width=True):
+                                st.session_state.stage = "order"
+                                st.session_state.order_id = ""
+                                st.rerun()
+                        with col2:
+                            if st.button("🏠 Start New Session", use_container_width=True):
+                                st.session_state.stage = "name"
+                                st.session_state.customer_name = ""
+                                st.session_state.order_id = ""
+                                st.rerun()
                     
                     elif result == "invalid_invoice":
                         st.session_state.attempts += 1
