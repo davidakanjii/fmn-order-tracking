@@ -133,7 +133,8 @@ def load_data():
         df = pd.DataFrame(data)
         
         if len(df) > 0:
-            st.success(f"✅ Connected to live Google Sheets data ({len(df)} records)")
+            # Successfully loaded - no message needed
+            pass
         else:
             raise Exception("Sheet is empty")
 
@@ -326,7 +327,7 @@ def display_delivery_map(order_df):
             lat_float = float(lat)
             lng_float = float(lng)
             
-            # Create map with PyDeck
+            # Create map with PyDeck - Light background map style
             view_state = pdk.ViewState(
                 latitude=lat_float,
                 longitude=lng_float,
@@ -338,14 +339,15 @@ def display_delivery_map(order_df):
                 "ScatterplotLayer",
                 data=[{"lat": lat_float, "lon": lng_float}],
                 get_position=["lon", "lat"],
-                get_color=[7, 100, 1, 200],
+                get_color=[7, 100, 1, 200],  # FMN Green
                 get_radius=200,
             )
             
+            # Use light map style instead of dark
             st.pydeck_chart(pdk.Deck(
                 layers=[layer],
                 initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/streets-v11"
+                map_style="mapbox://styles/mapbox/light-v10"  # Changed to light style
             ))
             
             st.caption(f"📍 Customer Location: {customer_loc}")
@@ -532,8 +534,13 @@ def main():
                         # SUCCESS - Display all sections
                         st.session_state.attempts = 0
                         
-                        st.success(f"### ✅ Order Found for {st.session_state.customer_name}!")
-                        st.write(f"**Sales Order:** {st.session_state.order_id}")
+                        # Success message with white text
+                        st.markdown(f"""
+                        <div style="background-color: {FMN_COLORS['primary_green']}; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                            <h3 style="color: white; margin: 0;">✅ Order Found for {st.session_state.customer_name}!</h3>
+                            <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         st.markdown("---")
                         
