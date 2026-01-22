@@ -132,7 +132,10 @@ def load_data():
         # Convert the data into a DataFrame
         df = pd.DataFrame(data)
         
-        if len(df) == 0:
+        if len(df) > 0:
+            # Successfully loaded - no message needed
+            pass
+        else:
             raise Exception("Sheet is empty")
 
     except Exception as e:
@@ -324,33 +327,7 @@ def display_delivery_map(order_df):
             lat_float = float(lat)
             lng_float = float(lng)
             
-            # Map style selector
-            map_styles = {
-                "Light": "mapbox://styles/mapbox/light-v10",
-                "Dark": "mapbox://styles/mapbox/dark-v10",
-                "Streets": "mapbox://styles/mapbox/streets-v11",
-                "Outdoors": "mapbox://styles/mapbox/outdoors-v11",
-                "Satellite": "mapbox://styles/mapbox/satellite-v9",
-                "Satellite Streets": "mapbox://styles/mapbox/satellite-streets-v11"
-            }
-            
-            # Initialize map style in session state if not exists
-            if 'selected_map_style' not in st.session_state:
-                st.session_state.selected_map_style = "Light"
-            
-            # Add map style selector with on_change callback
-            def update_map_style():
-                st.session_state.selected_map_style = st.session_state.map_style_selector
-            
-            selected_style = st.selectbox(
-                "Choose Map Style:",
-                options=list(map_styles.keys()),
-                index=list(map_styles.keys()).index(st.session_state.selected_map_style),
-                key="map_style_selector",
-                on_change=update_map_style
-            )
-            
-            # Create map with PyDeck
+            # Create map with PyDeck - Light background map style
             view_state = pdk.ViewState(
                 latitude=lat_float,
                 longitude=lng_float,
@@ -362,15 +339,15 @@ def display_delivery_map(order_df):
                 "ScatterplotLayer",
                 data=[{"lat": lat_float, "lon": lng_float}],
                 get_position=["lon", "lat"],
-                get_color=[253, 118, 1, 220],  # FMN Orange for better visibility
+                get_color=[7, 100, 1, 200],  # FMN Green
                 get_radius=200,
             )
             
-            # Use selected map style
+            # Use light map style instead of dark
             st.pydeck_chart(pdk.Deck(
                 layers=[layer],
                 initial_view_state=view_state,
-                map_style=map_styles[st.session_state.selected_map_style]
+                map_style="mapbox://styles/mapbox/light-v10"  # Changed to light style
             ))
             
             st.caption(f"📍 Customer Location: {customer_loc}")
@@ -554,100 +531,16 @@ def main():
                         result = find_order_details(st.session_state.order_id, invoice_clean, df)
                     
                     if isinstance(result, pd.DataFrame):
-                        # SUCCESS - Store result in session state and move to results stage
+                        # SUCCESS - Display all sections
                         st.session_state.attempts = 0
-                        st.session_state.order_result = result
-                        st.session_state.stage = "results"
-                        st.rerun()
-                    
-                    elif result == "invalid_invoice":
-                        st.session_state.attempts += 1
                         
-                        if st.session_state.attempts >= MAX_ATTEMPTS:
-                            st.session_state.blocked_until = datetime.now() + timedelta(minutes=5)
-                            st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
-                        else:
-                            st.error("❌ Invoice Account mismatch! Please verify and try again.")
-                    
-                    else:
-                        st.session_state.attempts += 1
-                        
-                        if st.session_state.attempts >= MAX_ATTEMPTS:
-                            st.session_state.blocked_until = datetime.now() + timedelta(minutes=5)
-                            st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
-                        else:
-                            st.error(f"❌ Order not found: {st.session_state.order_id}")
-    
-    # Stage 4: Results Display
-    elif st.session_state.stage == "results":
-        if 'order_result' not in st.session_state:
-            st.session_state.stage = "name"
-            st.rerun()
-            return
-        
-        result = st.session_state.order_result
-        
-        # Success message with white text
-        st.markdown(f"""
-        <div style="background-color: {FMN_COLORS['primary_green']}; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-            <h3 style="color: white; margin: 0;">✅ Order Found for {st.session_state.customer_name}!</h3>
-            <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
-        </div>
-        """, unsafe_allow_html=True)
-        # Check if blocked
-        if st.session_state.blocked_until:
-            if datetime.now() < st.session_state.blocked_until:
-                remaining = int((st.session_state.blocked_until - datetime.now()).total_seconds())
-                st.error(f"🚫 Too many failed attempts. Please wait {remaining} seconds.")
-                
-                if st.button("← Back to Start"):
-                    st.session_state.stage = "name"
-                    st.session_state.blocked_until = None
-                    st.session_state.attempts = 0
-                    st.rerun()
-                return
-            else:
-                st.session_state.blocked_until = None
-                st.session_state.attempts = 0
-        
-        st.header("🔒 Security Verification")
-        st.info(f"**Order ID:** {st.session_state.order_id}")
-        st.write("Please confirm your Invoice Account ID for security verification.")
-        
-        if st.session_state.attempts > 0:
-            st.warning(f"⚠️ Failed attempts: {st.session_state.attempts}/{MAX_ATTEMPTS}")
-        
-        invoice_account = st.text_input(
-            "Invoice Account ID:",
-            max_chars=50,
-            placeholder="e.g., C32064-B0"
-        )
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("← Back"):
-                st.session_state.stage = "order"
-                st.session_state.attempts = 0
-                st.rerun()
-        
-        with col2:
-            if st.button("Verify & Track Order 🔍", type="primary"):
-                if invoice_account.strip() == "":
-                    st.error("❌ Please enter your Invoice Account ID.")
-                else:
-                    invoice_clean = invoice_account.strip().upper()
-                    
-                    with st.spinner("🔍 Verifying credentials..."):
-                        time.sleep(1)
-                        result = find_order_details(st.session_state.order_id, invoice_clean, df)
-                    
-                    if isinstance(result, pd.DataFrame):
-                        # SUCCESS - Store result in session state and move to results stage
-                        st.session_state.attempts = 0
-                        st.session_state.order_result = result
-                        st.session_state.stage = "results"
-                        st.rerun()
+                        # Success message with white text
+                        st.markdown(f"""
+                        <div style="background-color: {FMN_COLORS['primary_green']}; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                            <h3 style="color: white; margin: 0;">✅ Order Found for {st.session_state.customer_name}!</h3>
+                            <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
                         
                         st.markdown("---")
                         
