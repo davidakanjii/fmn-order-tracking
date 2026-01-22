@@ -3,7 +3,7 @@ import pandas as pd
 import time
 from datetime import datetime, timedelta
 import pydeck as pdk
-from google.auth import service_account
+from google.oauth2 import service_account
 import gspread
 
 # -------------------------------------------------
