@@ -334,12 +334,20 @@ def display_delivery_map(order_df):
                 "Satellite Streets": "mapbox://styles/mapbox/satellite-streets-v11"
             }
             
-            # Add map style selector
+            # Initialize map style in session state if not exists
+            if 'selected_map_style' not in st.session_state:
+                st.session_state.selected_map_style = "Light"
+            
+            # Add map style selector with on_change callback
+            def update_map_style():
+                st.session_state.selected_map_style = st.session_state.map_style_selector
+            
             selected_style = st.selectbox(
                 "Choose Map Style:",
                 options=list(map_styles.keys()),
-                index=0,  # Default to Light
-                key="map_style_selector"
+                index=list(map_styles.keys()).index(st.session_state.selected_map_style),
+                key="map_style_selector",
+                on_change=update_map_style
             )
             
             # Create map with PyDeck
@@ -362,7 +370,7 @@ def display_delivery_map(order_df):
             st.pydeck_chart(pdk.Deck(
                 layers=[layer],
                 initial_view_state=view_state,
-                map_style=map_styles[selected_style]
+                map_style=map_styles[st.session_state.selected_map_style]
             ))
             
             st.caption(f"📍 Customer Location: {customer_loc}")
