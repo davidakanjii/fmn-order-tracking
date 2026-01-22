@@ -104,19 +104,24 @@ def load_data():
         creds = service_account.Credentials.from_service_account_info(
             st.secrets["gcp_service_account"]
         )
-
+        st.write("✅ Credentials loaded successfully.")
+        
         # Authenticate and access Google Sheets
         gc = gspread.authorize(creds)
+        st.write("✅ Google Sheets authentication successful.")
+        
         sheet = gc.open("Saleschatbotdb").sheet1  # Replace with your actual Google Sheet name
+        st.write("✅ Connected to Google Sheet.")
+        
         data = sheet.get_all_records()
 
         # Convert the data into a DataFrame
         df = pd.DataFrame(data)
         st.success("✅ Connected to live Google Sheets data")
 
-    except:
+    except Exception as e:
         # Fallback: Show error and use sample data
-        st.warning("⚠️ Google Sheets connection unavailable. Using sample data for demonstration.")
+        st.warning(f"⚠️ Google Sheets connection unavailable. Error: {str(e)}. Using sample data for demonstration.")
         
         # Sample data based on your actual data structure
         sample_data = {
