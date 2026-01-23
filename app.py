@@ -132,10 +132,7 @@ def load_data():
         # Convert the data into a DataFrame
         df = pd.DataFrame(data)
         
-        if len(df) > 0:
-            # Successfully loaded - no message needed
-            pass
-        else:
+        if len(df) == 0:
             raise Exception("Sheet is empty")
 
     except Exception as e:
@@ -261,22 +258,20 @@ def display_order_details(order_df):
     st.markdown("### 📋 Order Summary")
     first_row = order_df.iloc[0]
     
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.write(f"**Sales Order:** {first_row['Sales order']}")
-        st.write(f"**Payment Date:** {first_row.get('Payment receipt date', 'N/A')}")
-    with col2:
-        st.write(f"**Quantity Ordered:** {first_row['Quantity Order']} {first_row['Unit']}")
-        try:
-            st.write(f"**Unit Price:** ₦{float(first_row['Unit price']):,.2f}")
-        except:
-            st.write(f"**Unit Price:** {first_row['Unit price']}")
-    with col3:
-        st.write(f"**Total Items:** {len(order_df)}")
-        try:
-            st.write(f"**Net Amount:** ₦{float(first_row['Net amount']):,.2f}")
-        except:
-            st.write(f"**Net Amount:** {first_row['Net amount']}")
+    # Create table data
+    order_summary_data = {
+        "Field": ["Sales Order", "Quantity Ordered", "Unit Price", "Total Items", "Net Amount"],
+        "Value": [
+            first_row['Sales order'],
+            f"{first_row['Quantity Order']} {first_row['Unit']}",
+            f"₦{float(first_row['Unit price']):,.2f}" if pd.notna(first_row['Unit price']) and first_row['Unit price'] != 'N/A' else 'N/A',
+            str(len(order_df)),
+            f"₦{float(first_row['Net amount']):,.2f}" if pd.notna(first_row['Net amount']) and first_row['Net amount'] != 'N/A' else 'N/A'
+        ]
+    }
+    
+    summary_df = pd.DataFrame(order_summary_data)
+    st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 
 def display_delivery_timeline(order_df):
@@ -291,10 +286,14 @@ def display_delivery_timeline(order_df):
     # Order Status Information
     st.markdown("#### Order Tracking Status")
     
+    # Payment Date (moved here from Order Summary)
+    payment_date = first_row.get('Payment receipt date', 'N/A')
+    st.write(f"**💳 Payment Date:** {payment_date}")
+    st.markdown("---")
+    
     status_items = [
-        ("Order Dispatched", first_row.get('created_trip_date', 'N/A'), first_row.get('Order Dispatch Status', 'N/A')),
-        ("Arrived at Warehouse", first_row.get('arrival_at_source Date', 'N/A'), first_row.get('Vehicle Arrival Status at Warehouse Status', 'N/A')),
-        ("Trip Started", first_row.get('trip_started_date', 'N/A'), first_row.get('Trip Status', 'N/A')),
+        ("Loaded Truck Dispatch", first_row.get('created_trip_date', 'N/A'), first_row.get('Order Dispatch Status', 'N/A')),
+        ("Vehicle in Transit", first_row.get('trip_started_date', 'N/A'), first_row.get('Trip Status', 'N/A')),
         ("Arrived at Delivery Location", first_row.get('arrival_at_delivery_location Date', 'N/A'), first_row.get('Delivery Arrival Status', 'N/A'))
     ]
     
@@ -327,7 +326,33 @@ def display_delivery_map(order_df):
             lat_float = float(lat)
             lng_float = float(lng)
             
-            # Create map with PyDeck - Light background map style
+            # Map style selector
+            map_styles = {
+                "Light": "mapbox://styles/mapbox/light-v10",
+                "Dark": "mapbox://styles/mapbox/dark-v10",
+                "Streets": "mapbox://styles/mapbox/streets-v11",
+                "Outdoors": "mapbox://styles/mapbox/outdoors-v11",
+                "Satellite": "mapbox://styles/mapbox/satellite-v9",
+                "Satellite Streets": "mapbox://styles/mapbox/satellite-streets-v11"
+            }
+            
+            # Initialize map style in session state if not exists
+            if 'selected_map_style' not in st.session_state:
+                st.session_state.selected_map_style = "Light"
+            
+            # Add map style selector with on_change callback
+            def update_map_style():
+                st.session_state.selected_map_style = st.session_state.map_style_selector
+            
+            selected_style = st.selectbox(
+                "Choose Map Style:",
+                options=list(map_styles.keys()),
+                index=list(map_styles.keys()).index(st.session_state.selected_map_style),
+                key="map_style_selector",
+                on_change=update_map_style
+            )
+            
+            # Create map with PyDeck
             view_state = pdk.ViewState(
                 latitude=lat_float,
                 longitude=lng_float,
@@ -339,15 +364,15 @@ def display_delivery_map(order_df):
                 "ScatterplotLayer",
                 data=[{"lat": lat_float, "lon": lng_float}],
                 get_position=["lon", "lat"],
-                get_color=[7, 100, 1, 200],  # FMN Green
+                get_color=[253, 118, 1, 220],  # FMN Orange for better visibility
                 get_radius=200,
             )
             
-            # Use light map style instead of dark
+            # Use selected map style
             st.pydeck_chart(pdk.Deck(
                 layers=[layer],
                 initial_view_state=view_state,
-                map_style="mapbox://styles/mapbox/light-v10"  # Changed to light style
+                map_style=map_styles[st.session_state.selected_map_style]
             ))
             
             st.caption(f"📍 Customer Location: {customer_loc}")
@@ -531,51 +556,135 @@ def main():
                         result = find_order_details(st.session_state.order_id, invoice_clean, df)
                     
                     if isinstance(result, pd.DataFrame):
-                        # SUCCESS - Display all sections
+                        # SUCCESS - Store result in session state and move to results stage
                         st.session_state.attempts = 0
+                        st.session_state.order_result = result
+                        st.session_state.stage = "results"
+                        st.rerun()
+                    elif result == "invalid_invoice":
+                        st.session_state.attempts += 1
                         
-                        # Success message with white text
-                        st.markdown(f"""
-                        <div style="background-color: {FMN_COLORS['primary_green']}; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
-                            <h3 style="color: white; margin: 0;">✅ Order Found for {st.session_state.customer_name}!</h3>
-                            <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        if st.session_state.attempts >= MAX_ATTEMPTS:
+                            st.session_state.blocked_until = datetime.now() + timedelta(minutes=5)
+                            st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
+                        else:
+                            st.error("❌ Invoice Account mismatch! Please verify and try again.")
+                    else:
+                        st.session_state.attempts += 1
                         
-                        st.markdown("---")
-                        
-                        # Display all sections
-                        display_customer_details(result)
-                        st.markdown("---")
-                        
-                        display_product_details(result)
-                        st.markdown("---")
-                        
-                        display_order_details(result)
-                        st.markdown("---")
-                        
-                        display_delivery_timeline(result)
-                        st.markdown("---")
-                        
-                        display_delivery_map(result)
-                        st.markdown("---")
-                        
-                        display_vehicle_details(result)
-                        st.markdown("---")
-                        
-                        # Action buttons
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            if st.button("🔍 Track Another Order", use_container_width=True):
-                                st.session_state.stage = "order"
-                                st.session_state.order_id = ""
-                                st.rerun()
-                        with col2:
-                            if st.button("🏠 Start New Session", use_container_width=True):
-                                st.session_state.stage = "name"
-                                st.session_state.customer_name = ""
-                                st.session_state.order_id = ""
-                                st.rerun()
+                        if st.session_state.attempts >= MAX_ATTEMPTS:
+                            st.session_state.blocked_until = datetime.now() + timedelta(minutes=5)
+                            st.error(f"🚫 Maximum attempts exceeded. Locked for 5 minutes.")
+                        else:
+                            st.error(f"❌ Order not found: {st.session_state.order_id}")
+    
+    # Stage 4: Results Display
+    elif st.session_state.stage == "results":
+        if 'order_result' not in st.session_state:
+            st.session_state.stage = "name"
+            st.rerun()
+            return
+        
+        result = st.session_state.order_result
+        
+        # Success message with white text
+        st.markdown(f"""
+        <div style="background-color: {FMN_COLORS['primary_green']}; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+            <h3 style="color: white; margin: 0;">✅ Order Found for {st.session_state.customer_name}!</h3>
+            <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        # Check if blocked
+        if st.session_state.blocked_until:
+            if datetime.now() < st.session_state.blocked_until:
+                remaining = int((st.session_state.blocked_until - datetime.now()).total_seconds())
+                st.error(f"🚫 Too many failed attempts. Please wait {remaining} seconds.")
+                
+                if st.button("← Back to Start"):
+                    st.session_state.stage = "name"
+                    st.session_state.blocked_until = None
+                    st.session_state.attempts = 0
+                    st.rerun()
+                return
+            else:
+                st.session_state.blocked_until = None
+                st.session_state.attempts = 0
+        
+        st.header("🔒 Security Verification")
+        st.info(f"**Order ID:** {st.session_state.order_id}")
+        st.write("Please confirm your Invoice Account ID for security verification.")
+        
+        if st.session_state.attempts > 0:
+            st.warning(f"⚠️ Failed attempts: {st.session_state.attempts}/{MAX_ATTEMPTS}")
+        
+        invoice_account = st.text_input(
+            "Invoice Account ID:",
+            max_chars=50,
+            placeholder="e.g., C32064-B0"
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("← Back"):
+                st.session_state.stage = "order"
+                st.session_state.attempts = 0
+                st.rerun()
+        
+        with col2:
+            if st.button("Verify & Track Order 🔍", type="primary"):
+                if invoice_account.strip() == "":
+                    st.error("❌ Please enter your Invoice Account ID.")
+                else:
+                    invoice_clean = invoice_account.strip().upper()
+                    
+                    with st.spinner("🔍 Verifying credentials..."):
+                        time.sleep(1)
+                        result = find_order_details(st.session_state.order_id, invoice_clean, df)
+                    
+                    if isinstance(result, pd.DataFrame):
+                        # SUCCESS - Store result in session state and move to results stage
+                        st.session_state.attempts = 0
+                        st.session_state.order_result = result
+                        st.session_state.stage = "results"
+                        st.rerun()
+        
+        st.markdown("---")
+        
+        # Display all sections
+        display_customer_details(result)
+        st.markdown("---")
+        
+        display_product_details(result)
+        st.markdown("---")
+        
+        display_order_details(result)
+        st.markdown("---")
+        
+        display_delivery_timeline(result)
+        st.markdown("---")
+        
+        display_delivery_map(result)
+        st.markdown("---")
+        
+        display_vehicle_details(result)
+        st.markdown("---")
+        
+        # Action buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔍 Track Another Order", use_container_width=True):
+                st.session_state.stage = "order"
+                st.session_state.order_id = ""
+                st.session_state.order_result = None
+                st.rerun()
+        with col2:
+            if st.button("🏠 Start New Session", use_container_width=True):
+                st.session_state.stage = "name"
+                st.session_state.customer_name = ""
+                st.session_state.order_id = ""
+                st.session_state.order_result = None
+                st.rerun()
                     
                     elif result == "invalid_invoice":
                         st.session_state.attempts += 1
