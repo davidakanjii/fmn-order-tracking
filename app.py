@@ -594,6 +594,43 @@ def main():
             <p style="color: white; margin: 5px 0 0 0;"><strong>Sales Order:</strong> {st.session_state.order_id}</p>
         </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Display all sections
+        display_customer_details(result)
+        st.markdown("---")
+        
+        display_product_details(result)
+        st.markdown("---")
+        
+        display_order_details(result)
+        st.markdown("---")
+        
+        display_delivery_timeline(result)
+        st.markdown("---")
+        
+        display_delivery_map(result)
+        st.markdown("---")
+        
+        display_vehicle_details(result)
+        st.markdown("---")
+        
+        # Action buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔍 Track Another Order", use_container_width=True):
+                st.session_state.stage = "order"
+                st.session_state.order_id = ""
+                st.session_state.order_result = None
+                st.rerun()
+        with col2:
+            if st.button("🏠 Start New Session", use_container_width=True):
+                st.session_state.stage = "name"
+                st.session_state.customer_name = ""
+                st.session_state.order_id = ""
+                st.session_state.order_result = None
+                st.rerun()
         # Check if blocked
         if st.session_state.blocked_until:
             if datetime.now() < st.session_state.blocked_until:
